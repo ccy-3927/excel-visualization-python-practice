@@ -1,0 +1,26 @@
+{
+  "source": "D:\\CP\\python可视化课程\\《Excel数据可视化 - 从图表到数据大屏》-清华-郭宏远\\第二章 图表(后15).xlsx",
+  "main_charts": 15,
+  "extra_charts": 2,
+  "image_format": "PNG",
+  "validated_values": 377,
+  "source_cache_differences": [],
+  "main_files": [
+    "16_波浪水球图.png",
+    "17_玉玦图.png",
+    "18_跑道图.png",
+    "19_南丁格尔圆饼图.png",
+    "20_南丁格尔圆环图.png",
+    "20_南丁格尔（PPT）.png",
+    "22_仪表盘图.png",
+    "23_柱形折线图.png",
+    "24_目标柱形图.png",
+    "25_子弹图.png",
+    "26_柱形圆.png",
+    "27_簇状柱形折线图.png",
+    "28_复合柱形图.png",
+    "29_滑珠图.png",
+    "30_对比滑珠图.png"
+  ],
+  "note": "Python 重绘，非 Excel 原生导出。PPT 页保留原始组合路径及跨工作表标签引用。"
+}
