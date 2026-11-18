@@ -12,12 +12,12 @@
 |---|---|---|
 | 第二章：前15图 | 柱形图、折线图、甘特图、圆环图等 | PNG、SVG |
 | 第二章：后15图 | 南丁格尔图、仪表盘、子弹图及组合图等 | PNG |
-| 第三章：动态图表 | 动态图表与交互效果复现 | HTML |
+| 第三章：动态图表 | 七类动态图表、筛选联动与 Notebook 复现 | HTML、Streamlit、Jupyter |
 | 第四章：数据看板 | 销售与人力资源分析 | HTML、Streamlit |
 | 国家统计局：浙江省城市概况 | 公共交通、供水燃气、绿地与城市设施 | PNG、HTML、Python |
 | 国家统计局：全国人口 | 人口总量、年龄性别、城乡结构与普查画像 | PNG、HTML、Python |
 
-## 成果预览
+## 部分成果展示
 
 ### 第二章：前15图
 
@@ -42,6 +42,26 @@
 ![全国人口样本年龄金字塔](国家统计局数据可视化/全国人口/可视化/06_样本年龄金字塔.png)
 
 ## 交互功能
+
+### 第三章：Streamlit 动态图表
+
+新增 [第三章 Streamlit 版](第三章可视化/Streamlit版/)，使用原始 `第三章 动态图表.xlsm` 的数据复现七个案例：
+
+| 案例 | 交互方式 |
+|---|---|
+| 动态柱形图 | 切换月份，更新各区域销售额 |
+| 动态跑道图 | 切换月份，更新各部门人数 |
+| 动态南丁格尔圆环图 | 切换近7天 / 近30天，保留六层嵌套圆环 |
+| 动态组合图 | 分别勾选销售额、利润和利润率 |
+| 透视表切片器 | 多选部门，按所选员工人数加权计算各学历平均收入 |
+| VBA动态玉玦图 | 用 Python 控件切换统计周期，无需运行 VBA |
+| 动态滑珠图 | 按月份查看区域，或按区域查看月份 |
+
+最终动态成果是运行 `app.py` 后打开的 Streamlit 页面；Excel 文件是数据来源。切换控件时，Python 重新计算并绘制图表，不依赖预先导出的 PNG。
+
+[第三章可视化.ipynb](第三章可视化/Streamlit版/第三章可视化.ipynb) 可逐图运行并显示七张图，也提供可选的 Streamlit 启动与停止单元格。Notebook 已保存示例运行结果。
+
+第三章 Streamlit 版不再保留或自动生成“复现结果”文件夹。页面提供的 PNG / SVG 下载只是当前筛选状态的静态快照，CSV 为当前数据；动态交互需使用 Streamlit 页面。
 
 ### 销售看板
 
@@ -85,7 +105,16 @@ HTML 已内嵌数据和 Plotly.js，下载后可直接离线打开；同一专�
 │   ├── reproduce_charts.py
 │   └── 复现图表/
 ├── 第三章可视化/
-│   └── 网页版/
+│   ├── 网页版/
+│   └── Streamlit版/
+│       ├── app.py
+│       ├── charts.py
+│       ├── data_model.py
+│       ├── 第三章 动态图表.xlsm
+│       ├── 第三章可视化.ipynb
+│       ├── requirements.txt
+│       ├── 启动Streamlit.bat
+│       └── README.md
 ├── 第四章可视化/
 │   ├── 网页版/
 │   └── Streamlit版/
@@ -124,7 +153,7 @@ HTML 已内嵌数据和 Plotly.js，下载后可直接离线打开；同一专�
 
 建议使用 Python 3.10 或以上版本。
 
-运行 Streamlit 看板需要：
+第四章 Streamlit 看板需要：
 
 ```bash
 python -m pip install streamlit plotly openpyxl
@@ -136,9 +165,25 @@ python -m pip install streamlit plotly openpyxl
 python -m pip install matplotlib numpy pillow
 ```
 
-### 3. 启动 Streamlit 看板
+### 3. 启动第三章 Streamlit 动态图表
 
-在解压后的项目根目录打开终端，执行：
+在项目根目录打开终端，执行：
+
+```bash
+cd "第三章可视化/Streamlit版"
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+打开终端显示的本地网址即可使用七类图表。结束时按 `Ctrl+C` 停止服务。Windows 安装依赖后，也可以双击 `启动Streamlit.bat`。
+
+请将本目录中的 `.py`、`.ipynb` 和 `第三章 动态图表.xlsm` 一起保留。第三章代码直接读取同目录的数据副本，不自动查找根目录的“原文件”。
+
+在此目录运行 `python -m notebook`，打开 `第三章可视化.ipynb`，依次运行单元格可查看七图。若要从 Notebook 启动交互页面，将末尾启动单元格中的 `START_STREAMLIT` 改为 `True`；停止时将停止单元格中的 `STOP_STREAMLIT` 改为 `True`。默认“运行全部”只显示图表，不自动启动服务。
+
+### 4. 启动第四章 Streamlit 看板
+
+重新在解压后的项目根目录打开终端，执行：
 
 ```bash
 cd "第四章可视化/Streamlit版"
@@ -149,19 +194,19 @@ python -m streamlit run app.py
 
 程序会自动查找项目中的“原文件”目录，也可以在侧栏“数据位置与刷新”中手动指定数据位置。
 
-### 4. 在 Jupyter 中启动
+### 5. 在 Jupyter 中启动第四章看板
 
 打开 `Jupyter启动看板.ipynb`，将第一个单元格中的 `folder` 改为自己电脑上“Streamlit版”文件夹的实际路径，再依次运行代码单元格。
 
 Notebook负责启动服务，看板在独立浏览器页面显示。
 
-### 5. 查看离线网页版
+### 6. 查看离线网页版
 
 下载项目后，直接用浏览器打开“网页版”目录中的 HTML 文件即可。
 
 GitHub首页用于展示源码、说明和截图；上传仓库不会自动部署 Streamlit，也不会将本地网址变成公开演示地址。
 
-### 6. 重新生成国家统计局专题
+### 7. 重新生成国家统计局专题
 
 安装该专题依赖：
 
@@ -182,6 +227,18 @@ python "国家统计局数据可视化/全国人口/可视化/python/regenerate_
 
 ## 代码分工
 
+### 第三章 Streamlit 版
+
+| 文件 | 作用 |
+|---|---|
+| `第三章可视化/Streamlit版/app.py` | Streamlit 页面、筛选控件、数据表及按需下载 |
+| `第三章可视化/Streamlit版/charts.py` | 使用 Matplotlib 绘制七图，供页面与 Notebook 共用 |
+| `第三章可视化/Streamlit版/data_model.py` | 读取原始工作簿、汇总工资并校验默认透视结果 |
+| `第三章可视化/Streamlit版/第三章可视化.ipynb` | 逐图运行与可选的 Streamlit 服务启动 / 停止 |
+| `第三章可视化/Streamlit版/requirements.txt` | 本模块运行及 Notebook 所需依赖 |
+
+### 第四章 Streamlit 版
+
 | 文件 | 作用 |
 |---|---|
 | `app.py` | 页面布局、筛选控件、月份切换与自动播放 |
@@ -195,6 +252,10 @@ python "国家统计局数据可视化/全国人口/可视化/python/regenerate_
 
 ## 数据口径与复现说明
 
+- 第三章 Streamlit 版保留原图主要结构与默认筛选，部分配色、图例和柱形填充有所调整，不是 Excel 像素级复制。
+- 第三章跑道图按原表以总人数的一半为圆弧分母，玉玦图以 50% 为分母，圆弧角度不能直接理解为整体占比；应以标注数值为准。
+- 第三章南丁格尔圆环保留六层原始着色；组合图左轴为金额、右轴为利润率。多部门平均收入按收入合计除以人数计算，无记录不作为零收入参与计算。
+
 - 销售“销量”沿用原表的明细行数统计口径，不代表去重订单数或产品件数。
 - 销售额和利润额以“万”为单位；成本保留源表数值。
 - 原表标注的“同比”实际为月度环比，Python看板中已更正；1月缺少上年12月数据时不计算环比。
@@ -204,9 +265,41 @@ python "国家统计局数据可视化/全国人口/可视化/python/regenerate_
 - 全国人口的年度数据覆盖 2016—2025，年龄分组抽样提供 2016—2024 的有效年份（不含 2020），人口普查及预期寿命为 2020 年。样本人数与全国人口分别呈现。
 - 浙江省城市概况主要覆盖 2016—2024；部分城市建设指标的可用年份较短，按原表实际数据展示。
 
+## 第三章 Streamlit 版上传清单
+
+将下面 8 个文件放入仓库的 `第三章可视化/Streamlit版/`：
+
+```text
+app.py
+charts.py
+data_model.py
+第三章 动态图表.xlsm
+第三章可视化.ipynb
+requirements.txt
+启动Streamlit.bat
+README.md
+```
+
+其中 Excel 必须与代码放在同一目录，即使仓库的“原文件”目录中已有同名文件也需保留这个副本，因为当前代码按同目录读取。
+
+仓库根目录使用本 README；第三章子目录保留该模块自己的 README，两者不是同一份文件。
+
+不上传 `__pycache__/`、`.pyc`、`.ipynb_checkpoints/`、虚拟环境及 `Streamlit启动日志.txt`。第三章 Streamlit 的“复现结果”已移除，无需上传；第二章静态图及国家统计局专题图仍属于成果，应保留。
+
+推荐在仓库根目录的 `.gitignore` 中加入以下规则（如已有该文件，请合并规则）：
+
+```gitignore
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+Streamlit启动日志.txt
+```
+
 ## 技术栈
 
-Python · Matplotlib · NumPy · OpenPyXL · Pillow · Streamlit · Plotly · Jupyter
+Python · Matplotlib · NumPy · pandas · OpenPyXL · Pillow · Streamlit · Plotly · Jupyter
 
 ## 资料来源
 
