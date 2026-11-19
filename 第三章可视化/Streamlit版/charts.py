@@ -4,12 +4,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge, Patch
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.ticker import PercentFormatter
 from data_model import read_data
 
 NAMES = ['动态柱形图', '动态跑道图', '动态南丁格尔圆环图', '动态组合图', '透视表切片器', 'VBA动态玉玦图', '动态滑珠图']
-COLORS = ['#6073F3', '#0097E0', '#11A7AD', '#F5C353', '#E66B4C', '#C58AE8']
-BG = '#1A1E43'
 plt.rcParams.update({'font.sans-serif': ['Microsoft YaHei', 'SimHei', 'DejaVu Sans'], 'axes.unicode_minus': False, 'font.size': 11, 'svg.fonttype': 'none'})
 
 def load_data():
@@ -43,16 +42,30 @@ def current_table(d, i, s):
 def draw_chart(d, i, state=None):
     s=defaults(d) if state is None else state
     df, subtitle=current_table(d,i,s)
+    style=d['styles']
+    background=style['backgrounds'][i]
     fig, ax=plt.subplots(figsize=(10,6), layout='constrained')
-    fig.set_facecolor(BG)
-    ax.set_facecolor(BG)
+    fig.set_facecolor(background)
+    ax.set_facecolor(background)
     ax.tick_params(colors='white')
     for spine in ax.spines.values(): spine.set_visible(False)
     ax.set_title(f'{i+1:02d}  {NAMES[i]} · {subtitle}', color='white', pad=22, fontsize=15)
     labels=df['类别'].tolist()
     if i in (0,4):
         values=df['数值'].to_numpy()
-        bars=ax.bar(labels, np.nan_to_num(values), color=COLORS[1], width=.55)
+        bars=ax.bar(labels, np.nan_to_num(values), color=style['sales'] if i==0 else 'none', width=.55)
+        if i==4:
+            # Excel 90°渐变：顶端为第一个色标，底端为最后一个色标。
+            gradient=style['incomeGradient']
+            if style['incomeGradientAngle']!=90:
+                raise ValueError('当前工资柱形图仅支持原工作簿的 90°线性渐变。')
+            cmap=LinearSegmentedColormap.from_list('excel_income',[(g['offset'],g['color']) for g in gradient],N=256)
+            for bar,value in zip(bars,values):
+                if np.isfinite(value) and value>0:
+                    ax.imshow(np.linspace(1,0,256).reshape(-1,1),extent=[bar.get_x(),bar.get_x()+bar.get_width(),0,value],
+                              origin='lower',aspect='auto',cmap=cmap,vmin=0,vmax=1,interpolation='nearest',
+                              clip_path=bar,clip_on=True,zorder=2)
+            ax.set_xlim(-.6,len(labels)-.4)
         ax.bar_label(bars, labels=['无数据' if np.isnan(v) else f'{v:,.0f}' for v in values], padding=6, color='white')
         ax.set_ylim(0,max(1,np.nan_to_num(values).max())*1.2)
         ax.set_ylabel('平均月收入' if i==4 else '销售额（原表数值）',color='white')
@@ -61,47 +74,51 @@ def draw_chart(d, i, state=None):
         values=df['数值'].to_numpy()
         ax.set_aspect('equal'); ax.axis('off'); ax.set_xlim(-1.18,1.75); ax.set_ylim(-1.18,1.18)
         if i in (1,5):
-            hole=.45 if i==1 else .35
+            hole=style['rings'][str(i)]['hole']
+            start=90-style['rings'][str(i)]['angle']
+            colors=style['people'] if i==1 else style['jade']
             step=(1-hole)/len(values)
             denominator=values.sum()/2 if i==1 else .5
             for j,v in enumerate(values):
                 outer=hole+(j+1)*step
-                ax.add_patch(Wedge((0,0),outer,90-360*v/denominator,90,width=step*.83,facecolor=COLORS[j]))
+                ax.add_patch(Wedge((0,0),outer,start-360*v/denominator,start,width=step*.83,facecolor=colors[j]))
             center=f'{values.sum():,.0f}\n公司总人数' if i==1 else subtitle
             ax.text(0,0,center,ha='center',va='center',color='white',fontsize=15)
-            colors=COLORS
         else:
-            start=90
+            start=90-style['rings']['2']['angle']
+            hole=style['rings']['2']['hole']
+            step=(1-hole)/len(d['roseLayers'])
             for j,v in enumerate(values):
                 end=start-360*v/values.sum()
                 for k,layer in enumerate(d['roseLayers']):
-                    if layer[j]: ax.add_patch(Wedge((0,0),.52+(k+1)*.08,end,start,width=.081,facecolor=layer[j]))
+                    if layer[j]: ax.add_patch(Wedge((0,0),hole+(k+1)*step,end,start,width=step+.001,facecolor=layer[j]))
                 start=end
             colors=d['roseLayers'][0]
             ax.text(0,0,subtitle,ha='center',va='center',color='white',fontsize=15)
         legend=[f'{label}  {v:,.0f}人' if i==1 else f'{label}  {v:.0%}' for label,v in zip(labels,values)]
         ax.legend([Patch(color=colors[j]) for j in range(len(values))],legend,loc='center left',bbox_to_anchor=(.75,.5),frameon=False,labelcolor='white')
     elif i==3:
+        colors=style['combo']
         x=np.arange(len(labels)); ax.set_xticks(x,labels)
         for j,name in enumerate(['销售额','利润']):
             if s['combo'][j]:
-                bars=ax.bar(x+(j-.5)*.3,df[name],width=.28,label=name,color=COLORS[j])
+                bars=ax.bar(x+(j-.5)*.3,df[name],width=.28,label=name,color=colors[j])
                 ax.bar_label(bars,padding=4,color='white',fontsize=10)
-        ax.set_ylim(0,df[['销售额','利润']].to_numpy().max()*1.3)
+        ax.set_ylim(*style['comboLimits'][0])
         ax.set_ylabel('销售额 / 利润（原表数值）',color='white')
         if s['combo'][2]:
-            right=ax.twinx(); right.set_ylim(0,1); right.tick_params(colors=COLORS[3]); right.yaxis.set_major_formatter(PercentFormatter(1))
-            right.set_ylabel('利润率',color=COLORS[3])
-            right.plot(x,df['利润率'],color=COLORS[3],marker='D',label='利润率')
-            for xx,v in zip(x,df['利润率']): right.annotate(f'{v:.1%}',(xx,v),xytext=(0,-20),textcoords='offset points',ha='center',color=COLORS[3])
+            right=ax.twinx(); right.set_ylim(*style['comboLimits'][1]); right.tick_params(colors=colors[2]); right.yaxis.set_major_formatter(PercentFormatter(1))
+            right.set_ylabel('利润率',color=colors[2])
+            right.plot(x,df['利润率'],color=colors[2],marker='D',label='利润率')
+            for xx,v in zip(x,df['利润率']): right.annotate(f'{v:.1%}',(xx,v),xytext=(0,9),textcoords='offset points',ha='center',color=colors[2])
             for spine in right.spines.values(): spine.set_visible(False)
         if any(s['combo'][:2]): ax.legend(frameon=False,labelcolor='white',loc='upper left')
         if not any(s['combo']): ax.text(.5,.5,'请选择要显示的指标',transform=ax.transAxes,ha='center',color='white')
     else:
         values=df['数值'].to_numpy(); y=np.arange(len(labels))
-        ax.barh(y,np.ones(len(y)),color='#555B77',height=.22)
-        ax.barh(y,values,color=COLORS[1],height=.22)
-        ax.scatter(values,y,s=260,color=COLORS[1],edgecolor='white',zorder=3)
+        ax.barh(y,np.ones(len(y)),color=style['beadTrack'],alpha=style['beadTrackAlpha'],height=.22)
+        ax.barh(y,values,color=style['bead'],height=.22)
+        ax.scatter(values,y,s=260,color=style['beadMarker'],edgecolor=style['beadEdge'],zorder=3)
         for yy,v in zip(y,values): ax.text(v,yy+.25,f'{v:.1%}',ha='center',color='white')
         ax.set_yticks(y,labels); ax.set_xlim(0,1.08); ax.set_ylim(-.6,len(y)-.35)
         ax.xaxis.set_major_formatter(PercentFormatter(1)); ax.set_xlabel('销量目标达成率',color='white')

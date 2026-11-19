@@ -1,14 +1,4 @@
-"""第三章可视化：读取源数据并生成离线交互 HTML。
-
-安装依赖：pip install openpyxl
-运行：python 第三章可视化.py
-或：python 第三章可视化.py --input "第三章 动态图表.xlsm" --output "第三章可视化.html"
-
-HTML 内嵌全部必要数据、样式和 JavaScript，直接用浏览器打开即可。
-不调用 Excel、不执行 VBA、不修改原工作簿。浏览器控件实现工作簿的计算逻辑。
-05 只嵌入按部门与学历汇总的收入合计和人数，多部门筛选按人数加权。
-02 与06保留原图的半总量/50%占位分母；03保留六层嵌套圆环结构。
-"""
+"""只读提取第三章原始数据及 Excel 图表样式，不执行 VBA、不改写工作簿。"""
 from pathlib import Path
 import argparse
 import json
@@ -16,12 +6,70 @@ import warnings
 import zipfile
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+import colorsys
 import openpyxl
 
 NS={'c':'http://schemas.openxmlformats.org/drawingml/2006/chart',
     'a':'http://schemas.openxmlformats.org/drawingml/2006/main',
     's':'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
     'x':'http://schemas.microsoft.com/office/spreadsheetml/2009/9/main'}
+
+def read_chart_styles(z):
+    """解析本工作簿使用的 RGB/主题色、明度、透明度及渐变，避免另配颜色。"""
+    theme=ET.fromstring(z.read('xl/theme/theme1.xml'))
+    scheme=theme.find('a:themeElements/a:clrScheme',NS)
+    palette={e.tag.split('}')[-1]:list(e)[0].get('lastClr',list(e)[0].get('val')) for e in scheme}
+    aliases={'bg1':'lt1','tx1':'dk1','bg2':'lt2','tx2':'dk2'}
+    def color(node):
+        kind=node.tag.split('}')[-1]
+        if kind=='srgbClr': value=node.get('val')
+        elif kind=='schemeClr': value=palette[aliases.get(node.get('val'),node.get('val'))]
+        elif kind=='sysClr': value=node.get('lastClr')
+        else: raise ValueError(f'不支持的 Excel 颜色类型：{kind}')
+        rgb=[int(value[k:k+2],16)/255 for k in (0,2,4)]; alpha=1.
+        for transform in node:
+            name=transform.tag.split('}')[-1]; amount=int(transform.get('val'))/100000
+            if name in ('lumMod','lumOff'):
+                h,l,s=colorsys.rgb_to_hls(*rgb)
+                l=l*amount if name=='lumMod' else l+amount
+                rgb=list(colorsys.hls_to_rgb(h,min(1,max(0,l)),s))
+            elif name=='alpha': alpha=amount
+            else: raise ValueError(f'不支持的 Excel 颜色变换：{name}')
+        return '#'+''.join(f'{round(v*255):02X}' for v in rgb),alpha
+    def fill(parent,path='a:solidFill'):
+        element=parent.find(path,NS)
+        if element is None: raise ValueError(f'缺少 Excel 填充颜色：{path}')
+        return color(list(element)[0])
+    roots=[ET.fromstring(z.read(f'xl/charts/chart{i}.xml')) for i in range(1,8)]
+    series=[r.findall('.//c:ser',NS) for r in roots]
+    def point_fill(s):
+        point=next(p for p in s.findall('c:dPt',NS) if p.find('c:idx',NS).get('val')=='0')
+        return fill(point,'c:spPr/a:solidFill')[0]
+    gradient=series[4][0].find('c:spPr/a:gradFill',NS)
+    stops=[{'offset':int(g.get('pos'))/100000,'color':color(list(g)[0])[0]} for g in gradient.findall('a:gsLst/a:gs',NS)]
+    layers=[]
+    for s in series[2]:
+        points=sorted(s.findall('c:dPt',NS),key=lambda p:int(p.find('c:idx',NS).get('val')))
+        layers.append([None if p.find('c:spPr/a:noFill',NS) is not None else fill(p,'c:spPr/a:solidFill')[0] for p in points])
+    rings={}
+    for i in (1,2,5):
+        rings[str(i)]={'hole':int(roots[i].find('.//c:holeSize',NS).get('val'))/100,
+                       'angle':int(roots[i].find('.//c:firstSliceAng',NS).get('val'))}
+    axes=roots[3].findall('.//c:valAx',NS)
+    limits=[[float(ax.find('c:scaling/c:min',NS).get('val')),float(ax.find('c:scaling/c:max',NS).get('val'))] for ax in axes]
+    track,track_alpha=fill(series[6][1],'c:spPr/a:solidFill')
+    return {'backgrounds':[fill(r,'c:spPr/a:solidFill')[0] for r in roots],
+            'sales':fill(series[0][0],'c:spPr/a:solidFill')[0],
+            'people':[point_fill(s) for s in series[1]],
+            'roseLayers':layers,'rings':rings,
+            'combo':[fill(s,'c:spPr/a:solidFill')[0] for s in series[3][:2]]+[fill(series[3][2],'c:spPr/a:ln/a:solidFill')[0]],
+            'comboLimits':limits,'incomeGradient':stops,
+            'incomeGradientAngle':int(gradient.find('a:lin',NS).get('ang'))/60000,
+            'jade':[point_fill(s) for s in series[5]],
+            'bead':fill(series[6][0],'c:spPr/a:solidFill')[0],
+            'beadTrack':track,'beadTrackAlpha':track_alpha,
+            'beadMarker':fill(series[6][2],'c:marker/c:spPr/a:solidFill')[0],
+            'beadEdge':fill(series[6][2],'c:marker/c:spPr/a:ln/a:solidFill')[0]}
 
 def read_data(path):
     with warnings.catch_warnings():
@@ -50,6 +98,7 @@ def read_data(path):
         cached_pivot={book['5 透视表切片器'][f'B{r}'].value:book['5 透视表切片器'][f'C{r}'].value for r in range(4,9)}
         book.close()
     with zipfile.ZipFile(path) as z:
+        styles=read_chart_styles(z)
         cache=ET.fromstring(z.read('xl/pivotCache/pivotCacheDefinition1.xml'))
         fields=cache.findall('s:cacheFields/s:cacheField',NS)
         dept_items=[n.get('v') for n in fields[2].find('s:sharedItems',NS)]
@@ -58,23 +107,9 @@ def read_data(path):
         departments=[dept_items[int(n.get('x'))] for n in items]
         initial['departments']=[dept_items[int(n.get('x'))] for n in items if n.get('s')=='1']
         if not initial['departments']:initial['departments']=departments[:]
-        chart5=ET.fromstring(z.read('xl/charts/chart5.xml'))
-        stops=[{'offset':int(s.get('pos'))/1000,'color':'#'+s.find('a:srgbClr',NS).get('val')}
-               for s in chart5.findall('.//c:ser/c:spPr/a:gradFill/a:gsLst/a:gs',NS)]
-        chart3=ET.fromstring(z.read('xl/charts/chart3.xml'))
-        layers=[]
-        for series in chart3.findall('.//c:ser',NS):
-            layer=[]
-            for p in series.findall('c:dPt',NS):
-                sp=p.find('c:spPr',NS)
-                if sp.find('a:noFill',NS) is not None:layer.append(None)
-                else:
-                    rgb=sp.find('a:solidFill/a:srgbClr',NS)
-                    layer.append('#'+rgb.get('val') if rgb is not None else '#FFC000')
-            layers.append(layer)
     data={'sales':sales,'people':people,'rose':rose,'combo':combo,'jade':jade,'bead':bead,
           'income':{dep:dict(items) for dep,items in groups.items()},'departments':departments,'education':list(cached_pivot),
-          'initial':initial,'pivotGradient':stops,'roseLayers':layers}
+          'initial':initial,'styles':styles,'roseLayers':styles['roseLayers']}
     # 确认源数据重算与工作簿已保存的透视结果一致。
     for education,expected in cached_pivot.items():
         total=count=0

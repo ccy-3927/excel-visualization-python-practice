@@ -1,5 +1,6 @@
 """运行：python -m streamlit run app.py"""
 from io import BytesIO
+from pathlib import Path
 import matplotlib.pyplot as plt
 import streamlit as st
 from charts import NAMES, load_data, defaults, draw_chart
@@ -8,8 +9,8 @@ st.set_page_config(page_title='第三章 · 动态图表',page_icon='📊',layou
 st.title('第三章 · 动态图表')
 st.caption('《Excel数据可视化——从图表到数据大屏》｜原始工作簿数据 · Python / Streamlit 复现')
 @st.cache_data
-def get_data(): return load_data()
-d=get_data(); s=defaults(d)
+def get_data(workbook_modified): return load_data()
+d=get_data(Path(__file__).with_name('第三章 动态图表.xlsm').stat().st_mtime_ns); s=defaults(d)
 selected=st.sidebar.radio('选择图表',range(7),format_func=lambda i:f'{i+1:02d}  {NAMES[i]}')
 i=selected
 st.sidebar.divider()
@@ -27,12 +28,13 @@ elif i==4:
 elif i==6:
     s['beadMode']=st.sidebar.radio('查看方式',[0,1],index=s['beadMode'],format_func=lambda v:['按月份看区域','按区域看月份'][v])
     options=d['bead'][0][1:] if s['beadMode']==0 else [r[0] for r in d['bead'][1:]]
-    s['beadIndex']=st.sidebar.selectbox('月份' if s['beadMode']==0 else '区域',range(len(options)),index=0,format_func=lambda j:options[j],key=f'bead_{s["beadMode"]}')
+    initial_index=s['beadIndex'] if s['beadMode']==d['initial']['beadMode'] else 0
+    s['beadIndex']=st.sidebar.selectbox('月份' if s['beadMode']==0 else '区域',range(len(options)),index=initial_index,format_func=lambda j:options[j],key=f'bead_{s["beadMode"]}')
 fig,df=draw_chart(d,i,s)
 st.pyplot(fig,use_container_width=True)
 if i in (1,5): st.caption('按教材保留圆弧计算方式：跑道图分母为总人数的一半；玉玦图分母为 50%。圆弧角度不直接表示总体占比，请以标注数据为准。')
 if i==2: st.caption('保留原工作簿六层嵌套圆环及各层颜色；扇区角度表示来源占比，外径为教材设计。')
-if i==3: st.caption('按教材复现双轴：左轴为销售额与利润，右轴为利润率（0–100%）。')
+if i==3: st.caption('按原工作簿复现双轴：左轴为销售额与利润（0–4000），右轴为利润率（−100%～100%）。')
 if i==4:
     st.caption('多部门平均收入 = 所选员工收入合计 ÷ 人数；无记录显示为空，不作为零收入参与计算。')
     if not s['departments']: st.info('请选择至少一个部门以查看平均收入。')
